@@ -1,5 +1,6 @@
 slack_config.json
 target.json
+interpark_target.json
 __pycache__/
 *.pyc
 .env
