@@ -158,9 +158,15 @@ terraform apply
 - 기본 인스턴스: `t4g.nano` (ap-northeast-2 기준 약 $3/월)
 - 배포 후 자동으로 systemd 서비스로 등록되어 실행됨
 
-**SessionId 만료 시 갱신:**
+**세션 만료 시 갱신:**
 ```bash
 ssh -i ~/.ssh/id_rsa ec2-user@<IP>
+
+# 인터파크 체커: SessionId / cookies 갱신
 sudo nano /opt/ticket-checker/interpark_target.json
+
+# 멜론티켓 체커: cookies 갱신
+sudo nano /opt/ticket-checker/melon_target.json
+
 sudo systemctl restart ticket-checker
 ```
