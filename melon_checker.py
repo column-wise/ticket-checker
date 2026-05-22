@@ -99,7 +99,7 @@ def check_ticket(target, webhook_url):
         cnt = data.get("rmdSeatCnt", 0)
         chk = data.get("chkResult", 0)
 
-        log.info(f"rmdSeatCnt={cnt}  chkResult={chk}")
+        log.info(f"\n  잔여석:\t{cnt}\n  chkResult:\t{chk}")
 
         name = target.get("name", "")
         name_line = f"*{name}*\n" if name else ""
@@ -177,7 +177,7 @@ def main():
             continue
 
         delay = random.uniform(20, 40)
-        log.info(f"다음 확인까지 {delay:.1f}초 대기")
+        log.info(f"다음 확인까지 {delay:.1f}초 대기\n")
         time.sleep(delay)
 
 

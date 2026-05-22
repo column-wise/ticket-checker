@@ -4,6 +4,7 @@ import json
 import time
 import random
 import logging
+import unicodedata
 from pathlib import Path
 
 logging.basicConfig(
@@ -43,6 +44,19 @@ def load_target():
         if not data.get(key):
             raise ValueError(f"interpark_target.json에 {key} 값이 없습니다.")
     return data
+
+
+def _dw(s):
+    """터미널 표시 폭 (한글 등 전각 문자 = 2칸)"""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in s)
+
+
+def _abbr(name):
+    if name.startswith("지정석 "):
+        return name[4:]
+    if "EARLY" in name:
+        return "EARLY"
+    return name
 
 
 def parse_grades(xml_text):
@@ -96,8 +110,13 @@ def check_ticket(target, webhook_url):
             if g["remain"] > 0 and (not watch_grades or g["name"] in watch_grades)
         ]
 
-        status = " | ".join(f'{g["name"]} {g["remain"]}매' for g in grades)
-        log.info(status)
+        labels = [f"{_abbr(g['name'])}:" for g in grades]
+        col_w  = max(_dw(l) for l in labels)
+        lines  = "\n".join(
+            f"  {l}{' ' * (col_w - _dw(l) + 2)}{g['remain']}"
+            for l, g in zip(labels, grades)
+        )
+        log.info("\n" + lines)
 
         if available:
             lines = [f'*{g["name"]}* {g["remain"]}매 ({int(g["price"]):,}원)' for g in available]
@@ -181,7 +200,7 @@ def main():
             continue
 
         delay = random.uniform(20, 40)
-        log.info(f"다음 확인까지 {delay:.1f}초 대기")
+        log.info(f"다음 확인까지 {delay:.1f}초 대기\n")
         time.sleep(delay)
 
 
