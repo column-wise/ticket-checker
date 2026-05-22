@@ -130,12 +130,29 @@ def check_ticket(target, webhook_url):
         return "error"
 
 
+def _start_message(target):
+    goods_name = target.get("GoodsName", "")
+    play_date = target.get("PlayDate", "")
+    date_str = f"{play_date[:4]}.{play_date[4:6]}.{play_date[6:]}" if len(play_date) == 8 else play_date
+    watch_grades = target.get("watch_grades")
+    grades_str = ", ".join(watch_grades) if watch_grades else "전 등급"
+    return (
+        "🔍 인터파크 취소표 모니터링 시작\n"
+        + (f"*{goods_name}*\n" if goods_name else "")
+        + (f"📅 {date_str}  {target.get('PlaySeq', '')}회차\n" if date_str else "")
+        + f"👀 감시 등급: {grades_str}"
+    )
+
+
 def main():
     slack = load_slack_config()
     webhook_url = slack["webhook_url"]
 
     log.info("인터파크 티켓 체커 시작 (20~40초 랜덤 간격)")
-    send_slack(webhook_url, "🔍 인터파크 취소표 모니터링 시작")
+    try:
+        send_slack(webhook_url, _start_message(load_target()))
+    except Exception:
+        send_slack(webhook_url, "🔍 인터파크 취소표 모니터링 시작")
 
     consecutive_errors = 0
 

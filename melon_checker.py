@@ -14,7 +14,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 SLACK_CONFIG_FILE = Path("slack_config.json")
-TARGET_FILE = Path("target.json")
+TARGET_FILE = Path("melon_target.json")
 
 API_URL = "https://ticket.melon.com/tktapi/product/seatStateInfo.json"
 CALLBACK = "melonChecker"
@@ -101,20 +101,23 @@ def check_ticket(target, webhook_url):
 
         log.info(f"rmdSeatCnt={cnt}  chkResult={chk}")
 
+        name = target.get("name", "")
+        name_line = f"*{name}*\n" if name else ""
+        link = f"🔗 https://ticket.melon.com/performance/index.htm?prodId={target['prodId']}"
+
         if chk < 0 or "login" in resp.text.lower():
             log.warning("세션 만료 감지")
             send_slack(
                 webhook_url,
                 "⚠️ 멜론티켓 세션이 만료되었습니다.\n"
-                "target.json의 cookies를 브라우저에서 다시 내보내서 교체해주세요.",
+                "melon_target.json의 cookies를 브라우저에서 다시 내보내서 교체해주세요.",
             )
             return "session_expired"
 
         if cnt > 0:
             send_slack(
                 webhook_url,
-                f"🎫 취소표 발생! *{cnt}매* 예매 가능!\n"
-                f"https://ticket.melon.com/performance/index.htm?prodId={target['prodId']}",
+                f"🎫 멜론티켓 취소표 발생!\n{name_line}*{cnt}매* 예매 가능!\n{link}",
             )
             log.info(f"취소표 감지: {cnt}매")
             return "available"
@@ -122,8 +125,7 @@ def check_ticket(target, webhook_url):
         if chk > 0:
             send_slack(
                 webhook_url,
-                f"⚡ chkResult={chk} 감지! 상태 변화 가능성 있음.\n"
-                f"https://ticket.melon.com/performance/index.htm?prodId={target['prodId']}",
+                f"⚡ 멜론티켓 상태 변화 감지!\n{name_line}chkResult={chk}\n{link}",
             )
             log.info(f"chkResult 양수 감지: {chk}")
             return "chk_positive"
@@ -140,7 +142,13 @@ def main():
     webhook_url = slack["webhook_url"]
 
     log.info("티켓 체커 시작 (20~40초 랜덤 간격)")
-    send_slack(webhook_url, "🔍 멜론티켓 취소표 모니터링 시작")
+    try:
+        t = load_target()
+        name = t.get("name", "")
+        start_msg = "🔍 멜론티켓 취소표 모니터링 시작" + (f"\n*{name}*" if name else "")
+    except Exception:
+        start_msg = "🔍 멜론티켓 취소표 모니터링 시작"
+    send_slack(webhook_url, start_msg)
 
     consecutive_errors = 0
 

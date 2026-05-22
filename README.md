@@ -32,9 +32,9 @@ Slack Webhook URL 발급: [Slack API - Incoming Webhooks](https://api.slack.com/
 2. 취소표 발생 시 Slack 알림 전송
 3. 세션 만료 감지 시 쿠키 갱신 알림 전송
 
-### target.json 설정
+### melon_target.json 설정
 
-`target.example.json`을 복사해서 `target.json`으로 이름 변경
+`melon_target.example.json`을 복사해서 `melon_target.json`으로 이름 변경
 
 ```json
 {
@@ -67,7 +67,7 @@ Slack Webhook URL 발급: [Slack API - Incoming Webhooks](https://api.slack.com/
 ### 실행
 
 ```bash
-python checker.py
+python melon_checker.py
 ```
 
 ### 알림 종류
@@ -76,7 +76,7 @@ python checker.py
 |---|---|
 | 🎫 취소표 발생 | `rmdSeatCnt > 0` — 예매 가능 매수 표시 |
 | ⚡ 상태 변화 감지 | `chkResult > 0` — 상태 변화 가능성 |
-| ⚠️ 세션 만료 | target.json의 cookies 갱신 필요 |
+| ⚠️ 세션 만료 | melon_target.json의 cookies 갱신 필요 |
 | ❌ 연속 오류 | 5회 이상 API 호출 실패 |
 
 ---
@@ -123,10 +123,9 @@ python checker.py
 1. 개발자도구(F12) → Application → Cookies → `poticket.interpark.com` / `.interpark.com`
 2. `pcid`, `interparkstamp`, `ECCS`, `CAPTGM`, `ent_token` 값 복사해서 붙여넣기
 
-**`watch_grades`** — 감시할 등급명 목록. 생략하면 전 등급 감시
+**`watch_grades`** — 감시할 등급명 목록. 생략하거나 빈 배열이면 전 등급 감시
 
-> ⚠️ 로그인 세션이 아닌 방문 세션 쿠키 기반으로, 멜론티켓보다 오래 유지됩니다.
-> 만료 시 Slack으로 갱신 알림이 옵니다.
+> ⚠️ 세션 만료 시 Slack으로 갱신 알림이 옵니다. 예매 페이지에서 SessionId와 cookies를 재발급해주세요.
 
 ### 실행
 
@@ -141,3 +140,27 @@ python interpark_checker.py
 | 🎫 취소표 발생 | 등급별 잔여 매수 및 가격 표시 |
 | ⚠️ 세션 만료 | interpark_target.json의 SessionId / cookies 갱신 필요 |
 | ❌ 연속 오류 | 5회 이상 API 호출 실패 |
+
+---
+
+## AWS EC2 배포 (Terraform)
+
+클라우드에서 24/7 자동 실행하려면 `terraform/` 디렉토리를 참고하세요.
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# terraform.tfvars에 값 입력 후:
+terraform init
+terraform apply
+```
+
+- 기본 인스턴스: `t4g.nano` (ap-northeast-2 기준 약 $3/월)
+- 배포 후 자동으로 systemd 서비스로 등록되어 실행됨
+
+**SessionId 만료 시 갱신:**
+```bash
+ssh -i ~/.ssh/id_rsa ec2-user@<IP>
+sudo nano /opt/ticket-checker/interpark_target.json
+sudo systemctl restart ticket-checker
+```

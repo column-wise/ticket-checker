@@ -1,0 +1,37 @@
+# 이 파일을 terraform.tfvars로 복사하고 사용할 체커 섹션을 채워주세요
+# cp terraform.tfvars.example terraform.tfvars
+
+# ── 공통 ──────────────────────────────────────────────────────────────────────
+
+slack_webhook_url = "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+# ── 인터파크 ──────────────────────────────────────────────────────────────────
+
+checker_script = "interpark_checker.py"
+
+# 인터파크 예매 페이지 Network 탭 > BookInfoXml.asp?Flag=OrderSeatGrade > SessionId 파라미터
+interpark_session_id = "26006903_M..."
+
+# 브라우저 쿠키 (poticket.interpark.com / .interpark.com)
+interpark_cookies_pcid           = ""
+interpark_cookies_interparkstamp = ""
+interpark_cookies_eccs           = ""
+interpark_cookies_captgm         = ""
+interpark_cookies_ent_token      = ""
+
+# ── 멜론티켓 (위 섹션 대신 아래를 채우세요) ───────────────────────────────────
+
+# checker_script = "melon_checker.py"
+
+# 멜론티켓 예매 페이지 Network 탭 > seatStateInfo.json > Payload 참고
+# melon_name              = "공연명"
+# melon_prod_id           = ""
+# melon_schedule_no       = ""
+# melon_seat_id           = ""
+
+# 브라우저 쿠키 (ticket.melon.com)
+# melon_cookies_pcid         = ""
+# melon_cookies_jsessionid   = ""
+# melon_cookies_keycookie    = ""
+# melon_cookies_tkt_poc_id   = ""
+# melon_cookies_netfunnel_id = ""
