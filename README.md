@@ -143,30 +143,13 @@ python interpark_checker.py
 
 ---
 
-## AWS EC2 배포 (Terraform)
+## 클라우드 배포 불가 (인터파크)
 
-클라우드에서 24/7 자동 실행하려면 `terraform/` 디렉토리를 참고하세요.
+인터파크는 AWS를 포함한 클라우드 IP 대역을 CloudFront WAF로 차단합니다.
+EC2 등 클라우드 서버에서 실행하면 모든 API 요청이 403으로 차단됩니다.
 
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# terraform.tfvars에 값 입력 후:
-terraform init
-terraform apply
-```
+**대안:**
+- 로컬 PC에서 직접 실행
+- 항상 켜져 있는 가정용 기기 (라즈베리파이, NAS 등)
+- 한국 클라우드 (네이버 클라우드, KT Cloud 등) — 차단 여부 사전 확인 필요
 
-- 기본 인스턴스: `t4g.nano` (ap-northeast-2 기준 약 $3/월)
-- 배포 후 자동으로 systemd 서비스로 등록되어 실행됨
-
-**세션 만료 시 갱신:**
-```bash
-ssh -i ~/.ssh/id_rsa ec2-user@<IP>
-
-# 인터파크 체커: SessionId / cookies 갱신
-sudo nano /opt/ticket-checker/interpark_target.json
-
-# 멜론티켓 체커: cookies 갱신
-sudo nano /opt/ticket-checker/melon_target.json
-
-sudo systemctl restart ticket-checker
-```
