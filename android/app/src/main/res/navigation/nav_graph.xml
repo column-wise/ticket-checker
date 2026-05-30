@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/interparkFragment">
+
+    <fragment
+        android:id="@+id/interparkFragment"
+        android:name="com.ticketchecker.ui.interpark.InterparkFragment"
+        android:label="인터파크" />
+
+    <fragment
+        android:id="@+id/melonFragment"
+        android:name="com.ticketchecker.ui.melon.MelonFragment"
+        android:label="멜론티켓" />
+
+    <fragment
+        android:id="@+id/monitorFragment"
+        android:name="com.ticketchecker.ui.monitor.MonitorFragment"
+        android:label="모니터링" />
+
+</navigation>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">티켓 체커</string>
+    <string name="nav_interpark">인터파크</string>
+    <string name="nav_melon">멜론티켓</string>
+    <string name="nav_monitor">모니터링</string>
+    <string name="service_running">서비스 실행 중</string>
+    <string name="service_stopped">서비스 정지됨</string>
+    <string name="start_service">서비스 시작</string>
+    <string name="stop_service">서비스 정지</string>
+    <string name="not_set">미설정</string>
+    <string name="session_detected_interpark">인터파크 세션 감지됨 ✓</string>
+    <string name="session_detected_melon">멜론티켓 세션 감지됨 ✓</string>
+</resources>
