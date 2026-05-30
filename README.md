@@ -1,12 +1,50 @@
 # 🎫 ticket-checker
 
-멜론티켓 / 인터파크 취소표를 주기적으로 확인하여 Slack으로 알림을 보내주는 스크립트
+멜론티켓 / 인터파크 취소표를 주기적으로 확인하여 알림을 보내주는 도구
 
-## 공통 설정
+| 버전 | 알림 | 실행 환경 | 세션 설정 |
+|---|---|---|---|
+| **Android 앱** | 푸시 알림 | 안드로이드 폰 (24/7 상시 가동) | WebView에서 자동 추출 |
+| **Python 스크립트** | Slack Webhook | 로컬 PC / 서버 | 개발자도구로 수동 입력 |
+
+---
+
+## 📱 Android 앱 (`android/`)
+
+### 특징
+
+- WebView로 인터파크 / 멜론티켓에 직접 로그인 → 세션 자동 추출 (개발자도구 불필요)
+- 포그라운드 서비스로 24시간 백그라운드 폴링 (20~40초 랜덤 간격)
+- 취소표 발생 시 푸시 알림 → 탭하면 해당 플랫폼 예매 페이지로 이동
+- 인터파크 등급별 잔여석 / 가격 알림
+- 배터리 최적화 예외 설정으로 안정적인 상시 가동
+
+### 사용 방법
+
+1. Android Studio에서 `android/` 폴더 열기
+2. 기기에 빌드 & 설치
+3. **인터파크 탭** — 로그인 후 예매 페이지에서 좌석 선택 단계까지 진입 → 세션 자동 감지
+4. **멜론티켓 탭** — 로그인 후 예매 팝업 진입 → 세션 자동 감지
+5. **모니터링 탭** — 감지된 세션 확인, 등급 선택, 서비스 시작
+
+### 알림 종류
+
+| 알림 | 내용 |
+|---|---|
+| 🎫 취소표 발생 | 등급별 잔여석 + 가격 (인터파크) / 잔여 매수 (멜론) |
+| ⚠️ 세션 만료 | 앱 열어서 해당 탭 재진입 후 세션 갱신 |
+| ❌ 연속 오류 | 5회 이상 API 호출 실패 |
+
+---
+
+## 🐍 Python 스크립트 (`scripts/`)
+
+로컬 PC나 상시 가동 서버에서 실행하는 CLI 버전. Slack Webhook으로 알림 전송.
 
 ### 설치
 
 ```bash
+cd scripts
 pip install requests
 ```
 
@@ -24,15 +62,9 @@ Slack Webhook URL 발급: [Slack API - Incoming Webhooks](https://api.slack.com/
 
 ---
 
-## 멜론티켓
+### 멜론티켓
 
-### 동작 방식
-
-1. 20~40초 랜덤 간격으로 멜론티켓 API 폴링
-2. 취소표 발생 시 Slack 알림 전송
-3. 세션 만료 감지 시 쿠키 갱신 알림 전송
-
-### melon_target.json 설정
+#### melon_target.json 설정
 
 `melon_target.example.json`을 복사해서 `melon_target.json`으로 이름 변경
 
@@ -53,44 +85,23 @@ Slack Webhook URL 발급: [Slack API - Incoming Webhooks](https://api.slack.com/
 }
 ```
 
-**공연 정보 확인 방법**
-1. 멜론티켓 로그인 후 예매 페이지로 이동
+**공연 정보 / 쿠키 확인 방법**
+1. 멜론티켓 로그인 후 예매 팝업 진입
 2. 개발자도구(F12) → Network → `seatStateInfo.json` 요청 클릭
-3. Payload 탭에서 `prodId`, `scheduleNo`, `seatId` 값 확인
+3. Payload에서 `prodId`, `scheduleNo`, `seatId` 확인
+4. Application → Cookies → `ticket.melon.com`에서 쿠키 값 복사
 
-**쿠키 확인 방법**
-1. 개발자도구(F12) → Application → Cookies → `ticket.melon.com`
-2. 위 항목 값 복사해서 붙여넣기
-
-> ⚠️ 로그인 세션 쿠키 기반으로, 만료 시 Slack으로 갱신 알림이 옵니다.
-
-### 실행
+#### 실행
 
 ```bash
 python melon_checker.py
 ```
 
-### 알림 종류
-
-| 알림 | 내용 |
-|---|---|
-| 🎫 취소표 발생 | `rmdSeatCnt > 0` — 예매 가능 매수 표시 |
-| ⚡ 상태 변화 감지 | `chkResult > 0` — 상태 변화 가능성 |
-| ⚠️ 세션 만료 | melon_target.json의 cookies 갱신 필요 |
-| ❌ 연속 오류 | 5회 이상 API 호출 실패 |
-
 ---
 
-## 인터파크
+### 인터파크
 
-### 동작 방식
-
-1. 20~40초 랜덤 간격으로 인터파크 API 폴링
-2. 등급별 잔여석(`RemainCnt`) 확인
-3. 취소표 발생 시 등급명 / 잔여 매수 / 가격과 함께 Slack 알림 전송
-4. 세션 만료 감지 시 갱신 알림 전송
-
-### interpark_target.json 설정
+#### interpark_target.json 설정
 
 `interpark_target.example.json`을 복사해서 `interpark_target.json`으로 이름 변경
 
@@ -114,42 +125,29 @@ python melon_checker.py
 }
 ```
 
-**공연 정보 확인 방법**
-1. 인터파크 로그인 후 예매 페이지로 이동 (좌석 선택 단계까지 진입)
+**공연 정보 / 쿠키 확인 방법**
+1. 인터파크 로그인 후 예매 페이지에서 좌석 선택 단계까지 진입
 2. 개발자도구(F12) → Network → `BookInfoXml.asp?Flag=OrderSeatGrade` 요청 클릭
-3. URL에서 `GoodsCode`, `PlaceCode`, `PlaySeq`, `SessionId` 값 확인
-
-**쿠키 확인 방법**
-1. 개발자도구(F12) → Application → Cookies → `poticket.interpark.com` / `.interpark.com`
-2. `pcid`, `interparkstamp`, `ECCS`, `CAPTGM`, `ent_token` 값 복사해서 붙여넣기
+3. URL에서 `GoodsCode`, `PlaceCode`, `PlaySeq`, `SessionId` 확인
+4. Application → Cookies → `poticket.interpark.com`에서 쿠키 값 복사
 
 **`watch_grades`** — 감시할 등급명 목록. 생략하거나 빈 배열이면 전 등급 감시
 
-> ⚠️ 세션 만료 시 Slack으로 갱신 알림이 옵니다. 예매 페이지에서 SessionId와 cookies를 재발급해주세요.
-
-### 실행
+#### 실행
 
 ```bash
 python interpark_checker.py
 ```
 
-### 알림 종류
-
-| 알림 | 내용 |
-|---|---|
-| 🎫 취소표 발생 | 등급별 잔여 매수 및 가격 표시 |
-| ⚠️ 세션 만료 | interpark_target.json의 SessionId / cookies 갱신 필요 |
-| ❌ 연속 오류 | 5회 이상 API 호출 실패 |
-
 ---
 
-## 클라우드 배포 불가 (인터파크)
+## ⚠️ 클라우드 배포 불가 (인터파크)
 
 인터파크는 AWS를 포함한 클라우드 IP 대역을 CloudFront WAF로 차단합니다.
 EC2 등 클라우드 서버에서 실행하면 모든 API 요청이 403으로 차단됩니다.
 
 **대안:**
+- **Android 앱** (권장) — 폰을 충전기에 꽂아두고 24/7 가동
 - 로컬 PC에서 직접 실행
 - 항상 켜져 있는 가정용 기기 (라즈베리파이, NAS 등)
 - 한국 클라우드 (네이버 클라우드, KT Cloud 등) — 차단 여부 사전 확인 필요
-
