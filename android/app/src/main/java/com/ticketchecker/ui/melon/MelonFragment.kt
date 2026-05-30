@@ -1,7 +1,6 @@
 package com.ticketchecker.ui.melon
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -28,8 +27,6 @@ class MelonFragment : Fragment() {
         private const val TAG = "MelonFragment"
         private const val MELON_URL = "https://ticket.melon.com/main/index.htm"
         private const val JS_INTERFACE_NAME = "MelonAndroid"
-        private const val PREFS_NAME = "melon_webview"
-        private const val KEY_LAST_URL = "last_url"
     }
 
     private var _binding: FragmentWebviewBinding? = null
@@ -110,14 +107,6 @@ class MelonFragment : Fragment() {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 backCallback.isEnabled = view.canGoBack()
-                // 마지막 URL 저장 (복원용) — 세션 예매 팝업 페이지는 제외
-                val currentUrl = view.url
-                if (!currentUrl.isNullOrEmpty() &&
-                    currentUrl != "about:blank" &&
-                    !currentUrl.contains("reservation/popup")) {
-                    requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit().putString(KEY_LAST_URL, currentUrl).apply()
-                }
                 injectXhrInterceptor(view)
             }
 
@@ -127,11 +116,7 @@ class MelonFragment : Fragment() {
             }
         }
 
-        // 마지막으로 보던 페이지 복원, 없으면 메인으로
-        val lastUrl = requireContext()
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_LAST_URL, MELON_URL) ?: MELON_URL
-        webView.loadUrl(lastUrl)
+        webView.loadUrl(MELON_URL)
     }
 
     private fun injectXhrInterceptor(webView: WebView) {

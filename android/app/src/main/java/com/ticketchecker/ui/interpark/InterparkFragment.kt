@@ -1,7 +1,6 @@
 package com.ticketchecker.ui.interpark
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -29,8 +28,6 @@ class InterparkFragment : Fragment() {
         private const val TAG = "InterparkFragment"
         private const val INTERPARK_URL = "https://tickets.interpark.com/"
         private const val SESSION_TRIGGER = "BookInfoXml.asp?Flag=OrderSeatGrade"
-        private const val PREFS_NAME = "interpark_webview"
-        private const val KEY_LAST_URL = "last_url"
     }
 
     private var _binding: FragmentWebviewBinding? = null
@@ -113,14 +110,6 @@ class InterparkFragment : Fragment() {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 backCallback.isEnabled = view.canGoBack()
-                // 마지막 URL 저장 (복원용) — 세션 예매 페이지(poticket)는 제외
-                val currentUrl = view.url
-                if (!currentUrl.isNullOrEmpty() &&
-                    currentUrl != "about:blank" &&
-                    !currentUrl.contains("poticket.interpark.com")) {
-                    requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit().putString(KEY_LAST_URL, currentUrl).apply()
-                }
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -129,11 +118,7 @@ class InterparkFragment : Fragment() {
             }
         }
 
-        // 마지막으로 보던 페이지 복원, 없으면 메인으로
-        val lastUrl = requireContext()
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_LAST_URL, INTERPARK_URL) ?: INTERPARK_URL
-        webView.loadUrl(lastUrl)
+        webView.loadUrl(INTERPARK_URL)
     }
 
     private fun handleInterparkSession(url: String, webView: WebView) {
