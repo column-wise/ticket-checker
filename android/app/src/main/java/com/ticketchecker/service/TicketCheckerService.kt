@@ -144,14 +144,14 @@ class TicketCheckerService : Service() {
                             consecutiveErrors = 0
                         }
                     }
+                    val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
+                    Log.d(TAG, "Interpark next check in ${intervalMs / 1000}s")
+                    LogBuffer.append("[인터파크] 다음 체크: ${intervalMs / 1000}초 후")
+                    delay(intervalMs)
                 } else {
                     consecutiveErrors = 0
+                    delay(60_000L) // 세션 미설정 시 60초마다 재확인
                 }
-
-                val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
-                Log.d(TAG, "Interpark next check in ${intervalMs / 1000}s")
-                LogBuffer.append("[인터파크] 다음 체크: ${intervalMs / 1000}초 후")
-                delay(intervalMs)
             }
         }
 
@@ -218,14 +218,14 @@ class TicketCheckerService : Service() {
                             consecutiveErrors = 0
                         }
                     }
+                    val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
+                    Log.d(TAG, "Melon next check in ${intervalMs / 1000}s")
+                    LogBuffer.append("[멜론] 다음 체크: ${intervalMs / 1000}초 후")
+                    delay(intervalMs)
                 } else {
                     consecutiveErrors = 0
+                    delay(60_000L) // 세션 미설정 시 60초마다 재확인
                 }
-
-                val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
-                Log.d(TAG, "Melon next check in ${intervalMs / 1000}s")
-                LogBuffer.append("[멜론] 다음 체크: ${intervalMs / 1000}초 후")
-                delay(intervalMs)
             }
         }
     }
