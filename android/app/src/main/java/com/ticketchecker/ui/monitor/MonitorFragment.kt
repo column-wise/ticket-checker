@@ -94,6 +94,14 @@ class MonitorFragment : Fragment() {
             }
         }
 
+        viewModel.logs.observe(viewLifecycleOwner) { text ->
+            binding.tvLog.text = text
+            // 새 로그 추가 시 자동으로 맨 아래로 스크롤
+            binding.scrollLog.post {
+                binding.scrollLog.fullScroll(View.FOCUS_DOWN)
+            }
+        }
+
         viewModel.isServiceRunning.observe(viewLifecycleOwner) { running ->
             if (running) {
                 binding.tvServiceStatus.text = "실행 중"
@@ -123,6 +131,7 @@ class MonitorFragment : Fragment() {
         binding.btnClearInterpark.setOnClickListener { viewModel.clearInterparkTarget() }
         binding.btnClearMelon.setOnClickListener { viewModel.clearMelonTarget() }
         binding.btnRefresh.setOnClickListener { viewModel.refresh() }
+        binding.btnClearLogs.setOnClickListener { viewModel.clearLogs() }
 
         // 인터파크 등급 편집 — API에서 등급 목록 받아와 체크박스로 표시
         binding.btnEditGrades.setOnClickListener {

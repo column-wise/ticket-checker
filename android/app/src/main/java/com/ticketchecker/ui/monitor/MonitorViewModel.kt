@@ -9,6 +9,7 @@ import com.ticketchecker.model.InterparkTarget
 import com.ticketchecker.model.MelonTarget
 import com.ticketchecker.service.TicketCheckerService
 import com.ticketchecker.storage.TargetStorage
+import com.ticketchecker.util.LogBuffer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -31,6 +32,10 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isServiceRunning = MutableLiveData<Boolean>()
     val isServiceRunning: LiveData<Boolean> = _isServiceRunning
+
+    val logs: LiveData<String> = LogBuffer.logs
+
+    fun clearLogs() = LogBuffer.clear()
 
     fun refresh() {
         _interparkTarget.value = storage.loadInterparkTarget()

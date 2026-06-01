@@ -348,5 +348,65 @@
             android:text="새로고침"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
+        <!-- Log Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardElevation="2dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="로그"
+                        android:textAppearance="?attr/textAppearanceTitleMedium"
+                        android:textColor="?attr/colorPrimary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_clear_logs"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="지우기"
+                        style="@style/Widget.Material3.Button.TextButton" />
+
+                </LinearLayout>
+
+                <ScrollView
+                    android:id="@+id/scroll_log"
+                    android:layout_width="match_parent"
+                    android:layout_height="260dp"
+                    android:background="#F5F5F5"
+                    android:fadeScrollbars="false">
+
+                    <TextView
+                        android:id="@+id/tv_log"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textSize="11sp"
+                        android:padding="8dp"
+                        android:textColor="#333333"
+                        android:text="" />
+
+                </ScrollView>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
     </LinearLayout>
 </ScrollView>

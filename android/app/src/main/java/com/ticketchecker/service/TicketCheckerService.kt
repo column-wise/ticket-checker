@@ -10,6 +10,7 @@ import com.ticketchecker.checker.MelonCheckResult
 import com.ticketchecker.checker.MelonChecker
 import com.ticketchecker.notification.NotificationHelper
 import com.ticketchecker.storage.TargetStorage
+import com.ticketchecker.util.LogBuffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -90,6 +91,7 @@ class TicketCheckerService : Service() {
                 if (target != null) {
                     try {
                         Log.d(TAG, "Checking Interpark: ${target.goodsCode}")
+                        LogBuffer.append("[인터파크] 체크 중...")
                         when (val result = interparkChecker.check(target)) {
                             is InterparkCheckResult.Available -> {
                                 consecutiveErrors = 0
@@ -97,6 +99,7 @@ class TicketCheckerService : Service() {
                                 val showName = target.goodsName.ifEmpty { "공연 (${target.goodsCode})" }
                                 val gradeDetail = result.grades.joinToString("\n") { "  ${it.seatGradeName}: ${it.remainCnt}석 (${it.salesPrice}원)" }
                                 Log.i(TAG, "★ 인터파크 잔여석 발견! 총 ${totalCount}석 → $gradeDetail")
+                                LogBuffer.append("[인터파크] ★ 잔여석 발견! 총 ${totalCount}석\n$gradeDetail")
                                 NotificationHelper.sendCancelTicketAlert(
                                     applicationContext,
                                     showName,
@@ -107,16 +110,19 @@ class TicketCheckerService : Service() {
                             is InterparkCheckResult.NoTickets -> {
                                 consecutiveErrors = 0
                                 Log.d(TAG, "Interpark: no tickets")
+                                LogBuffer.append("[인터파크] 잔여 없음")
                             }
                             is InterparkCheckResult.SessionExpired -> {
                                 consecutiveErrors = 0
                                 Log.w(TAG, "Interpark: session expired")
+                                LogBuffer.append("[인터파크] 세션 만료 — 앱에서 갱신 필요")
                                 NotificationHelper.sendSessionExpiredAlert(applicationContext, "인터파크")
                                 storage.clearInterparkTarget()
                             }
                             is InterparkCheckResult.Error -> {
                                 consecutiveErrors++
                                 Log.e(TAG, "Interpark error: ${result.message} ($consecutiveErrors)")
+                                LogBuffer.append("[인터파크] 오류 (${consecutiveErrors}회): ${result.message}")
                                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                                     NotificationHelper.sendErrorAlert(
                                         applicationContext,
@@ -129,6 +135,7 @@ class TicketCheckerService : Service() {
                     } catch (e: Exception) {
                         consecutiveErrors++
                         Log.e(TAG, "Interpark exception", e)
+                        LogBuffer.append("[인터파크] 예외: ${e.message}")
                         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                             NotificationHelper.sendErrorAlert(
                                 applicationContext,
@@ -143,6 +150,7 @@ class TicketCheckerService : Service() {
 
                 val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
                 Log.d(TAG, "Interpark next check in ${intervalMs / 1000}s")
+                LogBuffer.append("[인터파크] 다음 체크: ${intervalMs / 1000}초 후")
                 delay(intervalMs)
             }
         }
@@ -159,11 +167,13 @@ class TicketCheckerService : Service() {
                 if (target != null) {
                     try {
                         Log.d(TAG, "Checking Melon: ${target.prodId}")
+                        LogBuffer.append("[멜론] 체크 중...")
                         when (val result = melonChecker.check(target)) {
                             is MelonCheckResult.Available -> {
                                 consecutiveErrors = 0
                                 val showName = target.name.ifEmpty { "공연 (${target.prodId})" }
                                 Log.i(TAG, "Melon tickets available! rmd=${result.rmdSeatCnt}")
+                                LogBuffer.append("[멜론] ★ 잔여석 발견! ${result.rmdSeatCnt}석")
                                 NotificationHelper.sendCancelTicketAlert(
                                     applicationContext,
                                     showName,
@@ -174,16 +184,19 @@ class TicketCheckerService : Service() {
                             is MelonCheckResult.NoTickets -> {
                                 consecutiveErrors = 0
                                 Log.d(TAG, "Melon: no tickets")
+                                LogBuffer.append("[멜론] 잔여 없음")
                             }
                             is MelonCheckResult.SessionExpired -> {
                                 consecutiveErrors = 0
                                 Log.w(TAG, "Melon: session expired")
+                                LogBuffer.append("[멜론] 세션 만료 — 앱에서 갱신 필요")
                                 NotificationHelper.sendSessionExpiredAlert(applicationContext, "멜론티켓")
                                 storage.clearMelonTarget()
                             }
                             is MelonCheckResult.Error -> {
                                 consecutiveErrors++
                                 Log.e(TAG, "Melon error: ${result.message} ($consecutiveErrors)")
+                                LogBuffer.append("[멜론] 오류 (${consecutiveErrors}회): ${result.message}")
                                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                                     NotificationHelper.sendErrorAlert(
                                         applicationContext,
@@ -196,6 +209,7 @@ class TicketCheckerService : Service() {
                     } catch (e: Exception) {
                         consecutiveErrors++
                         Log.e(TAG, "Melon exception", e)
+                        LogBuffer.append("[멜론] 예외: ${e.message}")
                         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                             NotificationHelper.sendErrorAlert(
                                 applicationContext,
@@ -210,6 +224,7 @@ class TicketCheckerService : Service() {
 
                 val intervalMs = Random.nextLong(MIN_INTERVAL_MS, MAX_INTERVAL_MS)
                 Log.d(TAG, "Melon next check in ${intervalMs / 1000}s")
+                LogBuffer.append("[멜론] 다음 체크: ${intervalMs / 1000}초 후")
                 delay(intervalMs)
             }
         }
