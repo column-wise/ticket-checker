@@ -1,6 +1,9 @@
 package com.ticketchecker.ui.melon
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -101,6 +104,32 @@ class MelonFragment : Fragment() {
         webView.addJavascriptInterface(MelonJsInterface(), JS_INTERFACE_NAME)
 
         webView.webViewClient = object : WebViewClient() {
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView,
+                request: android.webkit.WebResourceRequest
+            ): Boolean {
+                val url = request.url.toString()
+                val scheme = request.url.scheme ?: ""
+                if (scheme != "http" && scheme != "https") {
+                    return try {
+                        val intent = if (scheme == "intent") {
+                            Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                        } else {
+                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        }
+                        startActivity(intent)
+                        true
+                    } catch (e: ActivityNotFoundException) {
+                        Log.w(TAG, "No app to handle scheme: $scheme")
+                        true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "shouldOverrideUrlLoading error: $url", e)
+                        true
+                    }
+                }
+                return false
+            }
 
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
