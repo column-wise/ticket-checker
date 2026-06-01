@@ -13,7 +13,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.ticketchecker.databinding.ActivityMainBinding
 import com.ticketchecker.notification.NotificationHelper
 import com.ticketchecker.notification.NotificationHelper.EXTRA_TAB
@@ -43,11 +45,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // status bar 아래로 content가 내려가지 않도록 설정
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        // edge-to-edge 허용 후 insets를 직접 적용 (카메라 홀 포함)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // systemBars + displayCutout 모두 처리
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
 
         NotificationHelper.createChannels(this)
         setupFragments(savedInstanceState)
