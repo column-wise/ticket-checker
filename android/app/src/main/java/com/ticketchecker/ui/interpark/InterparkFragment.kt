@@ -29,7 +29,8 @@ class InterparkFragment : Fragment() {
     companion object {
         private const val TAG = "InterparkFragment"
         private const val INTERPARK_URL = "https://tickets.interpark.com/"
-        private const val SESSION_TRIGGER = "BookInfoXml.asp?Flag=OrderSeatGrade"
+        private const val SESSION_TRIGGER_PATH = "BookInfoXml.asp"
+        private const val SESSION_TRIGGER_FLAG = "Flag=OrderSeatGrade"
     }
 
     private var _binding: FragmentWebviewBinding? = null
@@ -132,7 +133,12 @@ class InterparkFragment : Fragment() {
             ): WebResourceResponse? {
                 val url = request.url.toString()
 
-                if (url.contains(SESSION_TRIGGER)) {
+                // poticket 도메인 요청 전체 로깅 (세션 감지 디버깅용)
+                if (url.contains("poticket.interpark.com")) {
+                    Log.d(TAG, "poticket request: $url")
+                }
+
+                if (url.contains(SESSION_TRIGGER_PATH) && url.contains(SESSION_TRIGGER_FLAG)) {
                     Log.d(TAG, "Session trigger detected: $url")
                     mainHandler.post {
                         handleInterparkSession(url, view)
