@@ -109,26 +109,33 @@ class MelonFragment : Fragment() {
                 view: WebView,
                 request: android.webkit.WebResourceRequest
             ): Boolean {
-                val url = request.url.toString()
                 val scheme = request.url.scheme ?: ""
-                if (scheme != "http" && scheme != "https") {
-                    return try {
-                        val intent = if (scheme == "intent") {
-                            Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
-                        } else {
-                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                if (scheme == "http" || scheme == "https") return false
+
+                return try {
+                    if (scheme == "intent") {
+                        val intent = Intent.parseUri(request.url.toString(), Intent.URI_INTENT_SCHEME)
+                        val dataScheme = intent.data?.scheme
+                        // intent:// 안에 http/https URL → WebView에서 직접 로드
+                        if (dataScheme == "https" || dataScheme == "http") {
+                            view.loadUrl(intent.data.toString())
+                            return true
                         }
-                        startActivity(intent)
-                        true
-                    } catch (e: ActivityNotFoundException) {
-                        Log.w(TAG, "No app to handle scheme: $scheme")
-                        true
-                    } catch (e: Exception) {
-                        Log.w(TAG, "shouldOverrideUrlLoading error: $url", e)
-                        true
+                        // 앱 딥링크 → 외부 앱으로
+                        if (intent.resolveActivity(requireContext().packageManager) != null) {
+                            startActivity(intent)
+                        }
+                    } else {
+                        startActivity(Intent(Intent.ACTION_VIEW, request.url))
                     }
+                    true
+                } catch (e: ActivityNotFoundException) {
+                    Log.w(TAG, "No app to handle scheme: $scheme")
+                    true
+                } catch (e: Exception) {
+                    Log.w(TAG, "shouldOverrideUrlLoading error", e)
+                    true
                 }
-                return false
             }
 
             override fun onPageFinished(view: WebView, url: String) {
