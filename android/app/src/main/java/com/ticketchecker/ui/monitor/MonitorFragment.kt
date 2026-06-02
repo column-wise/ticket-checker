@@ -62,7 +62,8 @@ class MonitorFragment : Fragment() {
 
                 // 날짜 + 회차
                 val dateStr = formatPlayDate(target.playDate)
-                val seqStr = if (target.playSeq.isNotEmpty()) "${target.playSeq}회차" else ""
+                val seqNum = target.playSeq.trimStart('0').ifEmpty { target.playSeq }
+                val seqStr = if (seqNum.isNotEmpty()) "${seqNum}회차" else ""
                 binding.tvInterparkDate.text = when {
                     dateStr.isNotEmpty() && seqStr.isNotEmpty() -> "$dateStr · $seqStr"
                     dateStr.isNotEmpty() -> dateStr
@@ -90,7 +91,20 @@ class MonitorFragment : Fragment() {
                 binding.btnClearMelon.visibility = View.VISIBLE
 
                 binding.tvMelonName.text = target.name.ifEmpty { "(미입력)" }
-                binding.tvMelonProdDetail.text = "${target.prodId} · ${target.scheduleNo}회차"
+                val melonDate = formatPlayDate(target.playDate)
+                binding.tvMelonProdDetail.text = melonDate.ifEmpty { "(날짜 미확인)" }
+
+                val gradeLabel = when {
+                    target.seatGradeName.isNotEmpty() -> target.seatGradeName
+                    target.seatId.isNotEmpty() -> "등급 ID: ${target.seatId}"
+                    else -> null
+                }
+                if (gradeLabel != null) {
+                    binding.llMelonGrade.visibility = View.VISIBLE
+                    binding.tvMelonGrade.text = gradeLabel
+                } else {
+                    binding.llMelonGrade.visibility = View.GONE
+                }
             }
         }
 

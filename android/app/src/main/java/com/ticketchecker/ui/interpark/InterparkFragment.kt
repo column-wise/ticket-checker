@@ -20,13 +20,21 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.JavascriptInterface
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.ticketchecker.checker.InterparkChecker
 import com.ticketchecker.databinding.FragmentWebviewBinding
 import com.ticketchecker.model.InterparkTarget
 import com.ticketchecker.storage.TargetStorage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class InterparkFragment : Fragment() {
 
@@ -48,6 +56,75 @@ class InterparkFragment : Fragment() {
     private var popupDialog: Dialog? = null
     private var popupWebView: WebView? = null
     private var yanoljaRedirectUrl: String? = null
+    private var lastConcertTitle: String = ""
+    private var lastConcertStartDate: String = ""
+    private var capturedInterparkPlayDate: String = ""
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
+    private val interparkChecker = lazy { InterparkChecker(okHttpClient) }
+
+    inner class InterparkJsInterface {
+        @JavascriptInterface
+        fun onConcertInfoCaptured(name: String, startDate: String) {
+            if (name.isBlank()) return
+            Log.d(TAG, "JS concert captured: name=$name, startDate=$startDate")
+            mainHandler.post {
+                lastConcertTitle = name
+                // normalize "2026-10-07..." → "20261007"
+                val normalized = if (startDate.length >= 10 && startDate[4] == '-')
+                    startDate.replace("-", "").take(8)
+                else startDate
+                if (normalized.matches(Regex("\\d{8}"))) lastConcertStartDate = normalized
+            }
+        }
+    }
+
+    private fun injectConcertCapture(view: WebView) {
+        view.evaluateJavascript("""
+            (function() {
+                var curUrl = location.href;
+                if (window.__ipCapturedUrl === curUrl) return;
+                function extractFromRaw(raw) {
+                    // JSON.parse 실패 시 (Interpark malformed JSON) regex로 추출
+                    var nm = raw.match(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                    var dm = raw.match(/"startDate"\s*:\s*"(\d{8})"/);
+                    return { name: nm ? nm[1] : '', startDate: dm ? dm[1] : '' };
+                }
+                function tryCapture() {
+                    var scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                    for (var i = 0; i < scripts.length; i++) {
+                        var raw = scripts[i].textContent;
+                        if (raw.indexOf('"Event"') < 0) continue;
+                        var name = '', sd = '';
+                        try {
+                            var d = JSON.parse(raw);
+                            if (d['@type'] === 'Event' && d.name) {
+                                name = d.name;
+                                sd = d.startDate || '';
+                            }
+                        } catch(e) {
+                            var r = extractFromRaw(raw);
+                            name = r.name; sd = r.startDate;
+                        }
+                        if (!name) continue;
+                        window.__ipCapturedUrl = curUrl;
+                        if (sd.length >= 10 && sd[4] === '-') sd = sd.replace(/-/g,'').substring(0,8);
+                        InterparkAndroid.onConcertInfoCaptured(name, sd);
+                        return true;
+                    }
+                    return false;
+                }
+                if (!tryCapture()) {
+                    var n = 0;
+                    var t = setInterval(function() {
+                        if (tryCapture() || ++n > 30) clearInterval(t);
+                    }, 300);
+                }
+            })();
+        """.trimIndent(), null)
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -103,6 +180,8 @@ class InterparkFragment : Fragment() {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(webView, true)
         }
+
+        webView.addJavascriptInterface(InterparkJsInterface(), "InterparkAndroid")
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(
@@ -204,6 +283,16 @@ class InterparkFragment : Fragment() {
                     mainHandler.post { handleInterparkSessionNew(url) }
                 }
 
+                // 유저가 선택한 날짜 캡처: /playseq/{goodsCode}/{placeCode}?playDate=YYYYMMDD
+                if (url.contains("api-onestop-front.interpark.com") &&
+                    url.contains("/playseq/") && url.contains("playDate=")) {
+                    val pd = Uri.parse(url).getQueryParameter("playDate") ?: ""
+                    if (pd.matches(Regex("\\d{8}"))) {
+                        Log.d(TAG, "Interpark playDate captured: $pd")
+                        mainHandler.post { capturedInterparkPlayDate = pd }
+                    }
+                }
+
                 // 구 예매 시스템(poticket): BookInfoXml.asp 세션 감지 (하위 호환)
                 if (url.contains(SESSION_TRIGGER_PATH) && url.contains(SESSION_TRIGGER_FLAG)) {
                     Log.d(TAG, "Legacy session trigger: $url")
@@ -217,13 +306,26 @@ class InterparkFragment : Fragment() {
                 binding.progressBar.visibility = View.GONE
                 backCallback.isEnabled = view.canGoBack()
                 // login-and-service-link 로드 완료 → 저장된 redirect URL로 즉시 이동
-                // (window.close() 실패 후 21초 대기 스킵)
                 if (url.contains("login-and-service-link")) {
                     val redirect = yanoljaRedirectUrl
                     if (redirect != null) {
                         Log.d(TAG, "login-and-service-link done, skipping wait → $redirect")
                         view.loadUrl(redirect)
                     }
+                }
+                // 인터파크 공연 상세 페이지 → React 렌더 후 JSON-LD 폴링으로 공연명/날짜 캡처
+                if (url.contains("tickets.interpark.com") || url.contains("ticket.interpark.com") ||
+                    url.contains("mobileticket.interpark.com")) {
+                    injectConcertCapture(view)
+                }
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                // Next.js SPA 내비게이션(pushState) 감지 — onPageFinished는 SPA 이동 시 안 불림
+                if (!isReload && (url.contains("tickets.interpark.com") || url.contains("ticket.interpark.com") ||
+                        url.contains("mobileticket.interpark.com"))) {
+                    injectConcertCapture(view)
                 }
             }
 
@@ -312,10 +414,18 @@ class InterparkFragment : Fragment() {
             val existing = storage.loadInterparkTarget()
             val isSameConcert = existing?.goodsCode == goodsCode
 
-            val extractedName = binding.webView.title
-                ?.replace(Regex("\\s*[-–|]\\s*인터파크.*$"), "")
+            // 우선순위: 이전 공연 상세 페이지 타이틀 → 현재 페이지 타이틀 → 기존 저장값
+            val titleFromPage = binding.webView.title
+                ?.replace(Regex("\\s*[-–|]\\s*(인터파크|NOL).*$", RegexOption.IGNORE_CASE), "")
                 ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() && !it.equals("NOL 티켓", ignoreCase = true) }
+            val extractedName = lastConcertTitle.takeIf { it.isNotEmpty() }
+                ?: titleFromPage
+
+            // 우선순위: 유저가 선택한 날짜(playseq API) > JSON-LD startDate > 기존 저장값
+            val resolvedDate = capturedInterparkPlayDate.takeIf { it.isNotEmpty() }
+                ?: lastConcertStartDate.takeIf { it.isNotEmpty() }
+                ?: if (isSameConcert) existing?.playDate ?: "" else ""
 
             val target = InterparkTarget(
                 goodsCode = goodsCode,
@@ -326,14 +436,18 @@ class InterparkFragment : Fragment() {
                 cookies = allCookies,
                 goodsName = extractedName
                     ?: if (isSameConcert) existing?.goodsName ?: "" else "",
-                playDate = if (isSameConcert) existing?.playDate ?: "" else "",
+                playDate = resolvedDate,
                 watchGrades = if (isSameConcert) existing?.watchGrades ?: emptyList() else emptyList()
             )
 
             storage.saveInterparkTarget(target)
-            Log.i(TAG, "Interpark target saved (new): goodsCode=$goodsCode, sessionId=${sessionId.take(10)}...")
-
+            capturedInterparkPlayDate = ""
+            lastConcertTitle = ""
+            lastConcertStartDate = ""
+            Log.i(TAG, "Interpark target saved (new): goodsCode=$goodsCode, name=${target.goodsName}, date=${target.playDate}, sessionId=${sessionId.take(10)}...")
             Toast.makeText(requireContext(), "인터파크 세션 감지됨 ✓", Toast.LENGTH_LONG).show()
+            fetchGoodsInfo(goodsCode)
+            fetchAndUpdateConcertInfo(target)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract interpark session (new)", e)
         }
@@ -369,11 +483,16 @@ class InterparkFragment : Fragment() {
             val existing = storage.loadInterparkTarget()
             val isSameConcert = existing?.goodsCode == goodsCode
 
-            // 페이지 타이틀에서 공연명 추출 (예: "위켄드 콘서트 - 인터파크티켓" → "위켄드 콘서트")
-            val extractedName = binding.webView.title
-                ?.replace(Regex("\\s*[-–|]\\s*인터파크.*$"), "")
+            val titleFromPage = binding.webView.title
+                ?.replace(Regex("\\s*[-–|]\\s*(인터파크|NOL).*$", RegexOption.IGNORE_CASE), "")
                 ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() && !it.equals("NOL 티켓", ignoreCase = true) }
+            val extractedName = lastConcertTitle.takeIf { it.isNotEmpty() }
+                ?: titleFromPage
+
+            val resolvedDate = capturedInterparkPlayDate.takeIf { it.isNotEmpty() }
+                ?: lastConcertStartDate.takeIf { it.isNotEmpty() }
+                ?: if (isSameConcert) existing?.playDate ?: "" else ""
 
             val target = InterparkTarget(
                 goodsCode = goodsCode,
@@ -384,17 +503,105 @@ class InterparkFragment : Fragment() {
                 cookies = finalCookies,
                 goodsName = extractedName
                     ?: if (isSameConcert) existing?.goodsName ?: "" else "",
-                playDate = if (isSameConcert) existing?.playDate ?: "" else "",
+                playDate = resolvedDate,
                 watchGrades = if (isSameConcert) existing?.watchGrades ?: emptyList() else emptyList()
             )
 
             storage.saveInterparkTarget(target)
-            Log.i(TAG, "Interpark target saved: goodsCode=$goodsCode, sessionId=${sessionId.take(10)}...")
-
+            capturedInterparkPlayDate = ""
+            lastConcertTitle = ""
+            lastConcertStartDate = ""
+            Log.i(TAG, "Interpark target saved: goodsCode=$goodsCode, name=${target.goodsName}, date=${target.playDate}, sessionId=${sessionId.take(10)}...")
             Toast.makeText(requireContext(), "인터파크 세션 감지됨 ✓", Toast.LENGTH_LONG).show()
+            fetchGoodsInfo(goodsCode)
+            fetchAndUpdateConcertInfo(target)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract interpark session", e)
         }
+    }
+
+    private fun fetchAndUpdateConcertInfo(target: InterparkTarget) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            val info = interparkChecker.value.fetchConcertInfo(target) ?: return@launch
+            val updated = target.copy(
+                goodsName = info.first.ifEmpty { target.goodsName },
+                playDate = info.second.ifEmpty { target.playDate }
+            )
+            if (updated.goodsName == target.goodsName && updated.playDate == target.playDate) return@launch
+            storage.saveInterparkTarget(updated)
+            withContext(Dispatchers.Main) {
+                Log.i(TAG, "Interpark concert info updated: '${updated.goodsName}' / ${updated.playDate}")
+            }
+        }
+    }
+
+    /** 공연 상세 페이지 HTML에서 Event JSON-LD를 파싱해 공연명/날짜 업데이트 */
+    private fun fetchGoodsInfo(goodsCode: String) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // mobileticket은 SSR로 JSON-LD 포함, tickets은 CSR이라 없을 수 있음
+                val urls = listOf(
+                    "https://mobileticket.interpark.com/goods/$goodsCode",
+                    "https://tickets.interpark.com/goods/$goodsCode"
+                )
+                for (url in urls) {
+                    val request = okhttp3.Request.Builder()
+                        .url(url)
+                        .header("User-Agent", DESKTOP_UA)
+                        .header("Accept-Language", "ko-KR,ko;q=0.9")
+                        .build()
+                    val html = okHttpClient.newCall(request).execute().body?.string() ?: continue
+                    val result = extractEventInfoFromHtml(html) ?: continue
+                    val (name, startDate) = result
+                    Log.i(TAG, "fetchGoodsInfo [$url]: name=$name, startDate=$startDate")
+                    withContext(Dispatchers.Main) {
+                        val cur = storage.loadInterparkTarget() ?: return@withContext
+                        if (cur.goodsCode != goodsCode) return@withContext
+                        val updatedDate = if (cur.playDate.isEmpty() && startDate.matches(Regex("\\d{8}")))
+                            startDate else cur.playDate
+                        if (name == cur.goodsName && updatedDate == cur.playDate) return@withContext
+                        storage.saveInterparkTarget(cur.copy(goodsName = name, playDate = updatedDate))
+                        Log.i(TAG, "Goods info applied: name=$name, date=$updatedDate")
+                    }
+                    return@launch
+                }
+                Log.d(TAG, "fetchGoodsInfo: no Event JSON-LD found for $goodsCode")
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchGoodsInfo failed", e)
+            }
+        }
+    }
+
+    private fun extractEventInfoFromHtml(html: String): Pair<String, String>? {
+        val ldJsonRegex = Regex(
+            """<script[^>]+type=["']application/ld\+json["'][^>]*>([\s\S]*?)</script>""",
+            RegexOption.IGNORE_CASE
+        )
+        for (match in ldJsonRegex.findAll(html)) {
+            val raw = match.groupValues[1].trim()
+            if (!raw.contains("\"Event\"")) continue
+            var name = ""
+            var startDate = ""
+            try {
+                val json = org.json.JSONObject(raw)
+                if (json.optString("@type") == "Event") {
+                    name = json.optString("name")
+                    startDate = json.optString("startDate")
+                }
+            } catch (e: Exception) {
+                // Interpark JSON-LD가 malformed인 경우 (organizer.name에 줄바꿈, image 이중따옴표)
+                val nm = Regex(""""name"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(raw)
+                if (nm != null) name = nm.groupValues[1]
+                val dm = Regex(""""startDate"\s*:\s*"(\d{8})"""").find(raw)
+                if (dm != null) startDate = dm.groupValues[1]
+            }
+            if (name.isEmpty()) continue
+            if (startDate.length >= 10 && startDate[4] == '-') {
+                startDate = startDate.replace("-", "").take(8)
+            }
+            return Pair(name, startDate)
+        }
+        return null
     }
 
     private fun parseCookies(cookieString: String): MutableMap<String, String> {

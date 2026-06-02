@@ -82,6 +82,73 @@ class InterparkChecker(private val client: OkHttpClient) {
         }
     }
 
+    /** BookInfoXml.asp 응답에서 공연명과 날짜를 파싱합니다. */
+    fun fetchConcertInfo(target: InterparkTarget): Pair<String, String>? {
+        return try {
+            val cookieHeader = target.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+            val url = API_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("Flag", "OrderSeatGrade")
+                .addQueryParameter("GoodsCode", target.goodsCode)
+                .addQueryParameter("PlaceCode", target.placeCode)
+                .addQueryParameter("BizCode", target.bizCode)
+                .addQueryParameter("PlaySeq", target.playSeq)
+                .addQueryParameter("SessionId", target.sessionId)
+                .addQueryParameter("InterlockingGoods", "")
+                .build()
+
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/xml, text/xml, */*")
+                .header("Referer", "https://poticket.interpark.com/")
+                .apply { if (cookieHeader.isNotEmpty()) header("Cookie", cookieHeader) }
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.d(TAG, "fetchConcertInfo failed: HTTP ${response.code}")
+                return null
+            }
+            val body = response.body?.string() ?: return null
+            Log.d(TAG, "fetchConcertInfo XML: ${body.take(800)}")
+            parseConcertInfo(body)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchConcertInfo failed", e)
+            null
+        }
+    }
+
+    private fun parseConcertInfo(xml: String): Pair<String, String>? {
+        var goodsName = ""
+        var playDate = ""
+        return try {
+            val factory = XmlPullParserFactory.newInstance()
+            val parser = factory.newPullParser()
+            parser.setInput(StringReader(xml))
+            var currentTag = ""
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> currentTag = parser.name
+                    XmlPullParser.TEXT -> {
+                        val text = parser.text.trim()
+                        if (text.isNotEmpty()) when (currentTag) {
+                            "GoodsName", "GoodsSubName" -> if (goodsName.isEmpty()) goodsName = text
+                            "PlayDate", "ShowDate", "PerformDate" -> if (playDate.isEmpty()) playDate = text
+                        }
+                    }
+                }
+                eventType = parser.next()
+            }
+            if (goodsName.isEmpty() && playDate.isEmpty()) null
+            else Pair(goodsName, playDate)
+        } catch (e: Exception) {
+            Log.e(TAG, "parseConcertInfo failed", e)
+            null
+        }
+    }
+
     /** API를 호출해 전체 좌석 등급명 목록을 반환합니다 (RemainCnt 무관). */
     fun fetchAllGradeNames(target: InterparkTarget): List<String> {
         return try {
