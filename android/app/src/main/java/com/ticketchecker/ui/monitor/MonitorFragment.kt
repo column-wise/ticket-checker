@@ -1,5 +1,7 @@
 package com.ticketchecker.ui.monitor
 
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +14,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.ticketchecker.databinding.FragmentMonitorBinding
+import com.ticketchecker.notification.AlertSettings
+import com.ticketchecker.notification.NotificationHelper
 import com.ticketchecker.service.TicketCheckerService
 import kotlinx.coroutines.launch
 
@@ -34,16 +38,45 @@ class MonitorFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupObservers()
         setupButtons()
+        setupAlertSettings()
     }
 
     override fun onResume() {
         super.onResume()
         viewModel.refresh()
+        refreshDndStatus()
     }
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (!hidden) viewModel.refresh()
+        if (!hidden) {
+            viewModel.refresh()
+            refreshDndStatus()
+        }
+    }
+
+    private fun setupAlertSettings() {
+        val ctx = requireContext()
+
+        // 무음/진동 모드 무시 스위치 초기값
+        binding.switchOverrideSilent.isChecked = AlertSettings.isOverrideSilentMode(ctx)
+        binding.switchOverrideSilent.setOnCheckedChangeListener { _, isChecked ->
+            AlertSettings.setOverrideSilentMode(ctx, isChecked)
+        }
+
+        // 방해 금지 모드 우회 상태 및 설정 버튼
+        refreshDndStatus()
+        binding.btnDndSettings.setOnClickListener {
+            startActivity(NotificationHelper.dndSettingsIntent())
+        }
+    }
+
+    private fun refreshDndStatus() {
+        val nm = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        binding.tvDndStatus.text = if (nm.isNotificationPolicyAccessGranted)
+            "✅ 허용됨 — 방해 금지 중에도 알림"
+        else
+            "❌ 미허용 — 아래 설정 버튼에서 허용"
     }
 
     private fun setupObservers() {
@@ -57,10 +90,8 @@ class MonitorFragment : Fragment() {
                 binding.llInterparkInfo.visibility = View.VISIBLE
                 binding.btnClearInterpark.visibility = View.VISIBLE
 
-                // 공연명
                 binding.tvInterparkName.text = target.goodsName.ifEmpty { "(미입력)" }
 
-                // 날짜 + 회차
                 val dateStr = formatPlayDate(target.playDate)
                 val seqNum = target.playSeq.trimStart('0').ifEmpty { target.playSeq }
                 val seqStr = if (seqNum.isNotEmpty()) "${seqNum}회차" else ""
@@ -71,7 +102,6 @@ class MonitorFragment : Fragment() {
                     else -> "(미입력)"
                 }
 
-                // 모니터링 등급
                 binding.tvInterparkGrades.text = if (target.watchGrades.isEmpty()) {
                     "전 등급"
                 } else {
@@ -110,10 +140,7 @@ class MonitorFragment : Fragment() {
 
         viewModel.logs.observe(viewLifecycleOwner) { text ->
             binding.tvLog.text = text
-            // 새 로그 추가 시 자동으로 맨 아래로 스크롤
-            binding.scrollLog.post {
-                binding.scrollLog.fullScroll(View.FOCUS_DOWN)
-            }
+            binding.scrollLog.post { binding.scrollLog.fullScroll(View.FOCUS_DOWN) }
         }
 
         viewModel.isServiceRunning.observe(viewLifecycleOwner) { running ->
@@ -136,21 +163,15 @@ class MonitorFragment : Fragment() {
             startCheckerService()
             viewModel.onServiceStartRequested()
         }
-
         binding.btnStopService.setOnClickListener {
             stopCheckerService()
             viewModel.onServiceStopRequested()
         }
-
         binding.btnClearInterpark.setOnClickListener { viewModel.clearInterparkTarget() }
         binding.btnClearMelon.setOnClickListener { viewModel.clearMelonTarget() }
         binding.btnRefresh.setOnClickListener { viewModel.refresh() }
         binding.btnClearLogs.setOnClickListener { viewModel.clearLogs() }
-
-        // 인터파크 등급 편집 — API에서 등급 목록 받아와 체크박스로 표시
-        binding.btnEditGrades.setOnClickListener {
-            showGradesDialog()
-        }
+        binding.btnEditGrades.setOnClickListener { showGradesDialog() }
     }
 
     private fun showGradesDialog() {
