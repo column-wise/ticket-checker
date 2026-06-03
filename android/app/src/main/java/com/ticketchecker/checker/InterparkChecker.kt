@@ -17,7 +17,7 @@ data class InterparkSeatGrade(
 
 sealed class InterparkCheckResult {
     data class Available(val grades: List<InterparkSeatGrade>) : InterparkCheckResult()
-    object NoTickets : InterparkCheckResult()
+    data class NoTickets(val allGrades: List<InterparkSeatGrade> = emptyList()) : InterparkCheckResult()
     data class Error(val message: String) : InterparkCheckResult()
     object SessionExpired : InterparkCheckResult()
 }
@@ -226,6 +226,7 @@ class InterparkChecker(private val client: OkHttpClient) {
             parser.setInput(StringReader(xml))
 
             val grades = mutableListOf<InterparkSeatGrade>()
+            val allGrades = mutableListOf<InterparkSeatGrade>()
             var inTable = false
             var seatGradeName = ""
             var remainCnt = 0
@@ -258,18 +259,12 @@ class InterparkChecker(private val client: OkHttpClient) {
                         if (parser.name == "Table" && inTable) {
                             inTable = false
                             Log.d(TAG, "등급: $seatGradeName | 잔여: ${remainCnt}석 | 가격: ${salesPrice}원")
+                            val grade = InterparkSeatGrade(seatGradeName, remainCnt, salesPrice)
+                            allGrades.add(grade)
                             if (remainCnt > 0) {
                                 val gradeMatch = watchGrades.isEmpty() ||
                                         watchGrades.any { it.equals(seatGradeName, ignoreCase = true) }
-                                if (gradeMatch) {
-                                    grades.add(
-                                        InterparkSeatGrade(
-                                            seatGradeName = seatGradeName,
-                                            remainCnt = remainCnt,
-                                            salesPrice = salesPrice
-                                        )
-                                    )
-                                }
+                                if (gradeMatch) grades.add(grade)
                             }
                             currentTag = ""
                         }
@@ -281,7 +276,7 @@ class InterparkChecker(private val client: OkHttpClient) {
             if (grades.isNotEmpty()) {
                 InterparkCheckResult.Available(grades)
             } else {
-                InterparkCheckResult.NoTickets
+                InterparkCheckResult.NoTickets(allGrades)
             }
         } catch (e: Exception) {
             Log.e(TAG, "XML parse failed", e)

@@ -109,8 +109,11 @@ class TicketCheckerService : Service() {
                             }
                             is InterparkCheckResult.NoTickets -> {
                                 consecutiveErrors = 0
-                                Log.d(TAG, "Interpark: no tickets")
-                                LogBuffer.append("[인터파크] 잔여 없음")
+                                val detail = if (result.allGrades.isNotEmpty())
+                                    result.allGrades.joinToString(", ") { "${it.seatGradeName} ${it.remainCnt}석" }
+                                else "등급 정보 없음"
+                                Log.d(TAG, "Interpark: no tickets ($detail)")
+                                LogBuffer.append("[인터파크] 잔여 없음 ($detail)")
                             }
                             is InterparkCheckResult.SessionExpired -> {
                                 consecutiveErrors = 0
@@ -183,8 +186,12 @@ class TicketCheckerService : Service() {
                             }
                             is MelonCheckResult.NoTickets -> {
                                 consecutiveErrors = 0
-                                Log.d(TAG, "Melon: no tickets")
-                                LogBuffer.append("[멜론] 잔여 없음")
+                                Log.d(TAG, "Melon: no tickets (${result.gradeSummary})")
+                                LogBuffer.append(
+                                    if (result.gradeSummary.isNotEmpty())
+                                        "[멜론] 잔여 없음 (${result.gradeSummary})"
+                                    else "[멜론] 잔여 없음"
+                                )
                             }
                             is MelonCheckResult.SessionExpired -> {
                                 consecutiveErrors = 0

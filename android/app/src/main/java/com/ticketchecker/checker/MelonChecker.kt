@@ -10,7 +10,7 @@ import org.json.JSONObject
 
 sealed class MelonCheckResult {
     data class Available(val rmdSeatCnt: Int, val chkResult: Int) : MelonCheckResult()
-    object NoTickets : MelonCheckResult()
+    data class NoTickets(val gradeSummary: String = "") : MelonCheckResult()
     data class Error(val message: String) : MelonCheckResult()
     object SessionExpired : MelonCheckResult()
 }
@@ -97,14 +97,19 @@ class MelonChecker(private val client: OkHttpClient) {
                 ?: return MelonCheckResult.Error("No summary array")
 
             var totalRemaining = 0
+            val gradeDetails = mutableListOf<String>()
             for (i in 0 until summaryArr.length()) {
-                totalRemaining += summaryArr.getJSONObject(i).optInt("realSeatCntlk", 0)
+                val item = summaryArr.getJSONObject(i)
+                val cnt = item.optInt("realSeatCntlk", 0)
+                val gradeName = item.optString("seatGradeName", "").ifEmpty { "등급${i + 1}" }
+                totalRemaining += cnt
+                gradeDetails.add("$gradeName ${cnt}석")
             }
 
-            Log.d(TAG, "realSeatCntlk total=$totalRemaining")
+            Log.d(TAG, "grades: ${gradeDetails.joinToString(", ")}, total=$totalRemaining")
 
             if (totalRemaining > 0) MelonCheckResult.Available(totalRemaining, 0)
-            else MelonCheckResult.NoTickets
+            else MelonCheckResult.NoTickets(gradeDetails.joinToString(", "))
         } catch (e: Exception) {
             Log.e(TAG, "Parse failed", e)
             MelonCheckResult.Error("Parse error: ${e.message}")
