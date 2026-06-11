@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -91,6 +94,34 @@ object NotificationHelper {
         if (AlertSettings.isOverrideSilentMode(context)) CHANNEL_ALERT_ALARM
         else CHANNEL_ALERT_NORMAL
 
+    /**
+     * 알람 볼륨으로 소리 직접 재생 — 무음/진동 모드 우회.
+     * NotificationChannel 사운드는 ringer 상태를 따르므로 MediaPlayer로 직접 재생.
+     */
+    private fun playAlarmSoundDirectly(context: Context) {
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(context, uri)
+                prepare()
+                isLooping = true
+                start()
+            }
+            // 진동 패턴 길이(~2650ms)에 맞춰 4초 후 종료
+            Handler(Looper.getMainLooper()).postDelayed({
+                try { mp.stop(); mp.release() } catch (_: Exception) {}
+            }, 4000L)
+        } catch (e: Exception) {
+            Log.w(TAG, "playAlarmSoundDirectly failed", e)
+        }
+    }
+
     /** 진동 직접 호출 — amplitude 제어 */
     private fun vibrateDirectly(context: Context) {
         try {
@@ -143,6 +174,9 @@ object NotificationHelper {
             .build()
         nm.notify(alertNotificationId++, notification)
         vibrateDirectly(context)
+        if (AlertSettings.isOverrideSilentMode(context)) {
+            playAlarmSoundDirectly(context)
+        }
     }
 
     fun sendErrorAlert(context: Context, message: String) {

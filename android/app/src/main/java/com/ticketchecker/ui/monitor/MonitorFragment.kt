@@ -172,6 +172,14 @@ class MonitorFragment : Fragment() {
         binding.btnRefresh.setOnClickListener { viewModel.refresh() }
         binding.btnClearLogs.setOnClickListener { viewModel.clearLogs() }
         binding.btnEditGrades.setOnClickListener { showGradesDialog() }
+        binding.btnTestNotification.setOnClickListener {
+            NotificationHelper.sendCancelTicketAlert(
+                requireContext(),
+                "테스트 공연",
+                "VIP석 3석 / R석 1석",
+                NotificationHelper.TAB_INTERPARK
+            )
+        }
     }
 
     private fun showGradesDialog() {

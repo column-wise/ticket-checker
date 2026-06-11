@@ -462,6 +462,20 @@
 
                 </LinearLayout>
 
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- 알림 테스트 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_test_notification"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔔 알림 테스트"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
