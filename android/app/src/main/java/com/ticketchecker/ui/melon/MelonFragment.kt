@@ -230,15 +230,7 @@ class MelonFragment : Fragment() {
                 Log.d(TAG, "Non-http scheme: $scheme url=${request.url}")
                 return try {
                     if (scheme == "intent") {
-                        val intent = Intent.parseUri(request.url.toString(), Intent.URI_INTENT_SCHEME)
-                        val dataScheme = intent.data?.scheme
-                        if (dataScheme == "https" || dataScheme == "http") {
-                            view.loadUrl(intent.data.toString())
-                            return true
-                        }
-                        if (intent.resolveActivity(requireContext().packageManager) != null) {
-                            startActivity(intent)
-                        }
+                        handleIntentScheme(view, request.url.toString())
                     } else if (scheme == "about" || scheme == "javascript") {
                         // 무시
                     } else {
@@ -294,7 +286,11 @@ class MelonFragment : Fragment() {
                     val scheme = request.url.scheme ?: ""
                     if (scheme == "http" || scheme == "https") return false
                     return try {
-                        startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                        if (scheme == "intent") {
+                            handleIntentScheme(view, request.url.toString())
+                        } else if (scheme != "about" && scheme != "javascript") {
+                            startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                        }
                         true
                     } catch (e: Exception) { true }
                 }
@@ -733,6 +729,33 @@ class MelonFragment : Fragment() {
         if (existing.playDate == date) return
         storage.saveMelonTarget(existing.copy(playDate = date))
         Log.i(TAG, "Melon playDate updated: $date")
+    }
+
+    /**
+     * intent:// 스킴 처리.
+     * 우선순위: 앱 설치됨 → startActivity / 앱 없음 → data http/https → browser_fallback_url
+     */
+    private fun handleIntentScheme(view: WebView, url: String) {
+        try {
+            val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            Log.d(TAG, "intent:// pkg=${intent.`package`} data=${intent.data}")
+            if (intent.resolveActivity(requireContext().packageManager) != null) {
+                startActivity(intent)
+                return
+            }
+            val dataScheme = intent.data?.scheme
+            if (dataScheme == "https" || dataScheme == "http") {
+                view.loadUrl(intent.data.toString())
+                return
+            }
+            val fallback = intent.getStringExtra("browser_fallback_url")
+            if (fallback != null) {
+                Log.d(TAG, "intent:// fallback: $fallback")
+                view.loadUrl(fallback)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "handleIntentScheme failed: $url", e)
+        }
     }
 
     private fun parseCookies(cookieString: String): MutableMap<String, String> {

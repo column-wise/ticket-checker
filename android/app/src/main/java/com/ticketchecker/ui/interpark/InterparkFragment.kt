@@ -236,28 +236,11 @@ class InterparkFragment : Fragment() {
                 Log.d(TAG, "Non-http scheme: $scheme url=$url")
                 return try {
                     if (scheme == "intent") {
-                        val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
-                        val dataScheme = intent.data?.scheme
-                        // intent:// 안에 http/https URL → WebView에서 직접 로드
-                        if (dataScheme == "https" || dataScheme == "http") {
-                            view.loadUrl(intent.data.toString())
-                            return true
-                        }
-                        // browser_fallback_url 있으면 앱 대신 WebView에서 로드
-                        val fallback = intent.getStringExtra("browser_fallback_url")
-                        if (fallback != null) {
-                            Log.d(TAG, "Using browser_fallback_url: $fallback")
-                            view.loadUrl(fallback)
-                            return true
-                        }
-                        // 앱 딥링크 (네이버 앱 등) → 외부 앱으로
-                        if (intent.resolveActivity(requireContext().packageManager) != null) {
-                            startActivity(intent)
-                        }
+                        handleIntentScheme(view, url)
                     } else if (scheme == "about" || scheme == "javascript") {
                         // about:blank#blocked 등 WebView 내부 URL — 브라우저 열림 방지
                     } else {
-                        // naver://, kakao:// 등
+                        // naver://, kakao://, shinhan:// 등 커스텀 스킴
                         startActivity(Intent(Intent.ACTION_VIEW, request.url))
                     }
                     true
@@ -357,7 +340,11 @@ class InterparkFragment : Fragment() {
                     val scheme = request.url.scheme ?: ""
                     if (scheme == "http" || scheme == "https") return false
                     return try {
-                        startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                        if (scheme == "intent") {
+                            handleIntentScheme(view, request.url.toString())
+                        } else if (scheme != "about" && scheme != "javascript") {
+                            startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                        }
                         true
                     } catch (e: Exception) { true }
                 }
@@ -602,6 +589,36 @@ class InterparkFragment : Fragment() {
             return Pair(name, startDate)
         }
         return null
+    }
+
+    /**
+     * intent:// 스킴 처리.
+     * 우선순위: 앱 설치됨 → startActivity / 앱 없음 → data http/https → browser_fallback_url
+     */
+    private fun handleIntentScheme(view: WebView, url: String) {
+        try {
+            val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            Log.d(TAG, "intent:// pkg=${intent.`package`} data=${intent.data}")
+            // 1) 앱이 설치된 경우 → 앱 실행
+            if (intent.resolveActivity(requireContext().packageManager) != null) {
+                startActivity(intent)
+                return
+            }
+            // 2) 앱 없음, data가 http/https → WebView에서 직접 로드
+            val dataScheme = intent.data?.scheme
+            if (dataScheme == "https" || dataScheme == "http") {
+                view.loadUrl(intent.data.toString())
+                return
+            }
+            // 3) browser_fallback_url
+            val fallback = intent.getStringExtra("browser_fallback_url")
+            if (fallback != null) {
+                Log.d(TAG, "intent:// fallback: $fallback")
+                view.loadUrl(fallback)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "handleIntentScheme failed: $url", e)
+        }
     }
 
     private fun parseCookies(cookieString: String): MutableMap<String, String> {
