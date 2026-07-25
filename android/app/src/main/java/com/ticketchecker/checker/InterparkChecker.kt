@@ -273,8 +273,16 @@ class InterparkChecker(private val client: OkHttpClient) {
                 eventType = parser.next()
             }
 
+            val namedGrades = allGrades.filter { it.seatGradeName.isNotBlank() }
+
             if (grades.isNotEmpty()) {
                 InterparkCheckResult.Available(grades)
+            } else if (namedGrades.isEmpty()) {
+                // 정상 응답이면 등급명(SeatGradeName)이 채워진 Table이 최소 1개는 있어야 함.
+                // Table이 아예 없거나 이름 없는 빈 row뿐이면 로그인 페이지 등 세션 만료
+                // 응답을 못 걸러낸 경우일 가능성이 높음
+                Log.w(TAG, "No named grade rows parsed (rows=${allGrades.size}) — treating as session expired. body head: ${xml.take(200)}")
+                InterparkCheckResult.SessionExpired
             } else {
                 InterparkCheckResult.NoTickets(allGrades)
             }
