@@ -330,8 +330,27 @@ class InterparkFragment : Fragment() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 userAgentString = mobileUA
+                javaScriptCanOpenWindowsAutomatically = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             }
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            addJavascriptInterface(InterparkJsInterface(), "InterparkAndroid")
+            webChromeClient = object : WebChromeClient() {
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+                    Log.d(TAG, "onCreateWindow called (nested popup)")
+                    return showPopupWebView(resultMsg)
+                }
+
+                override fun onCloseWindow(window: WebView) {
+                    Log.d(TAG, "onCloseWindow called (nested popup)")
+                    dismissPopup()
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
@@ -347,6 +366,42 @@ class InterparkFragment : Fragment() {
                         }
                         true
                     } catch (e: Exception) { true }
+                }
+
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest
+                ): WebResourceResponse? {
+                    val url = request.url.toString()
+
+                    if (url.contains("api-onestop-front.interpark.com") &&
+                        url.contains("/seats/") && url.contains("/init?")) {
+                        Log.d(TAG, "New session trigger (popup): $url")
+                        mainHandler.post { handleInterparkSessionNew(url) }
+                    }
+
+                    if (url.contains("api-onestop-front.interpark.com") &&
+                        url.contains("/playseq/") && url.contains("playDate=")) {
+                        val pd = Uri.parse(url).getQueryParameter("playDate") ?: ""
+                        if (pd.matches(Regex("\\d{8}"))) {
+                            Log.d(TAG, "Interpark playDate captured (popup): $pd")
+                            mainHandler.post { capturedInterparkPlayDate = pd }
+                        }
+                    }
+
+                    if (url.contains(SESSION_TRIGGER_PATH) && url.contains(SESSION_TRIGGER_FLAG)) {
+                        Log.d(TAG, "Legacy session trigger (popup): $url")
+                        mainHandler.post { handleInterparkSession(url, view) }
+                    }
+                    return null
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    if (url.contains("tickets.interpark.com") || url.contains("ticket.interpark.com") ||
+                        url.contains("mobileticket.interpark.com")) {
+                        injectConcertCapture(view)
+                    }
                 }
             }
         }
@@ -599,10 +654,13 @@ class InterparkFragment : Fragment() {
         try {
             val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
             Log.d(TAG, "intent:// pkg=${intent.`package`} data=${intent.data}")
-            // 1) 앱이 설치된 경우 → 앱 실행
-            if (intent.resolveActivity(requireContext().packageManager) != null) {
+            // 1) 앱 실행 시도. resolveActivity()는 Android 11+ package visibility로 신뢰 불가
+            //    (queries 미선언 시 설치된 앱도 null 반환) — 직접 startActivity로 시도
+            try {
                 startActivity(intent)
                 return
+            } catch (e: ActivityNotFoundException) {
+                Log.d(TAG, "No app to handle intent, falling back: $url")
             }
             // 2) 앱 없음, data가 http/https → WebView에서 직접 로드
             val dataScheme = intent.data?.scheme
@@ -615,6 +673,9 @@ class InterparkFragment : Fragment() {
             if (fallback != null) {
                 Log.d(TAG, "intent:// fallback: $fallback")
                 view.loadUrl(fallback)
+            } else {
+                Log.w(TAG, "intent:// no fallback available: $url")
+                Toast.makeText(requireContext(), "연결할 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Log.w(TAG, "handleIntentScheme failed: $url", e)

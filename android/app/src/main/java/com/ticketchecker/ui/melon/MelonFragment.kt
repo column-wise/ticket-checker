@@ -276,8 +276,27 @@ class MelonFragment : Fragment() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 userAgentString = mobileUA
+                javaScriptCanOpenWindowsAutomatically = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             }
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            addJavascriptInterface(MelonJsInterface(), JS_INTERFACE_NAME)
+            webChromeClient = object : WebChromeClient() {
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+                    Log.d(TAG, "onCreateWindow called (nested popup)")
+                    return showPopupWebView(resultMsg)
+                }
+
+                override fun onCloseWindow(window: WebView) {
+                    Log.d(TAG, "onCloseWindow called (nested popup)")
+                    dismissPopup()
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
@@ -293,6 +312,19 @@ class MelonFragment : Fragment() {
                         }
                         true
                     } catch (e: Exception) { true }
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    injectXhrInterceptor(view)
+                }
+
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    if (!url.startsWith("about:") &&
+                        (url.contains("ticket.melon.com") || url.contains("melon.com"))) {
+                        injectXhrInterceptor(view)
+                    }
                 }
             }
         }
@@ -739,9 +771,11 @@ class MelonFragment : Fragment() {
         try {
             val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
             Log.d(TAG, "intent:// pkg=${intent.`package`} data=${intent.data}")
-            if (intent.resolveActivity(requireContext().packageManager) != null) {
+            try {
                 startActivity(intent)
                 return
+            } catch (e: ActivityNotFoundException) {
+                Log.d(TAG, "No app to handle intent, falling back: $url")
             }
             val dataScheme = intent.data?.scheme
             if (dataScheme == "https" || dataScheme == "http") {
@@ -752,6 +786,9 @@ class MelonFragment : Fragment() {
             if (fallback != null) {
                 Log.d(TAG, "intent:// fallback: $fallback")
                 view.loadUrl(fallback)
+            } else {
+                Log.w(TAG, "intent:// no fallback available: $url")
+                Toast.makeText(requireContext(), "연결할 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Log.w(TAG, "handleIntentScheme failed: $url", e)

@@ -34,7 +34,17 @@ class TargetStorage(context: Context) {
     fun loadInterparkTarget(): InterparkTarget? {
         val json = prefs.getString(KEY_INTERPARK_TARGET, null) ?: return null
         return try {
-            gson.fromJson(json, InterparkTarget::class.java)
+            gson.fromJson(json, InterparkTarget::class.java)?.let {
+                // Gson은 리플렉션으로 객체를 생성해 Kotlin 기본값을 건너뛰므로,
+                // 필드 추가 이전에 저장된 JSON을 로드하면 non-null 필드가 null이 될 수 있음
+                @Suppress("SENSELESS_COMPARISON")
+                it.copy(
+                    goodsName = if (it.goodsName == null) "" else it.goodsName,
+                    playDate = if (it.playDate == null) "" else it.playDate,
+                    watchGrades = if (it.watchGrades == null) emptyList() else it.watchGrades,
+                    cookies = if (it.cookies == null) emptyMap() else it.cookies
+                )
+            }
         } catch (e: Exception) {
             null
         }
@@ -51,7 +61,19 @@ class TargetStorage(context: Context) {
     fun loadMelonTarget(): MelonTarget? {
         val json = prefs.getString(KEY_MELON_TARGET, null) ?: return null
         return try {
-            gson.fromJson(json, MelonTarget::class.java)
+            gson.fromJson(json, MelonTarget::class.java)?.let {
+                @Suppress("SENSELESS_COMPARISON")
+                it.copy(
+                    pocCode = if (it.pocCode == null) "" else it.pocCode,
+                    seatId = if (it.seatId == null) "" else it.seatId,
+                    seatGradeName = if (it.seatGradeName == null) "" else it.seatGradeName,
+                    playDate = if (it.playDate == null) "" else it.playDate,
+                    volume = if (it.volume == null) "1" else it.volume,
+                    selectedGradeVolume = if (it.selectedGradeVolume == null) "1" else it.selectedGradeVolume,
+                    name = if (it.name == null) "" else it.name,
+                    cookies = if (it.cookies == null) emptyMap() else it.cookies
+                )
+            }
         } catch (e: Exception) {
             null
         }
